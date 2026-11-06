@@ -1,0 +1,77 @@
+
+name: Build WebAuthn dependency ZIP
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up PHP and Composer
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          tools: composer:v2
+          coverage: none
+
+      - name: Install WebAuthn and dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p webauthn-package
+          cd webauthn-package
+
+          composer init \
+            --name="local/webauthn-package" \
+            --type=project \
+            --no-interaction
+
+          composer config platform.php 8.4.27
+
+          composer require web-auth/webauthn-lib:5.3.12 \
+            --no-interaction \
+            --no-progress \
+            --prefer-dist \
+            --optimize-autoloader
+
+          composer install \
+            --no-dev \
+            --no-interaction \
+            --no-progress \
+            --prefer-dist \
+            --optimize-autoloader
+
+          composer validate --no-check-publish
+          test -f vendor/autoload.php
+          php -r 'require "vendor/autoload.php"; echo "Autoload OK\n";'
+
+      - name: Create Turkish instructions
+        run: |
+          cat > webauthn-package/README-TR.txt <<'EOF'
+          WebAuthn PHP bağımlılık paketi
+          Hedef PHP: 8.4.27
+
+          Composer yükleyicisi:
+          require_once __DIR__ . '/webauthn-package/vendor/autoload.php';
+
+          HTTPS gereklidir.
+          Sunucuda gerekli PHP uzantıları etkin olmalıdır.
+          EOF
+
+      - name: Create ZIP
+        run: |
+          zip -qr webauthn-package.zip webauthn-package
+          test -s webauthn-package.zip
+
+      - name: Upload ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: webauthn-package
+          path: webauthn-package.zip
+          if-no-files-found: error
+          retention-days: 7
